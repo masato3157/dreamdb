@@ -158,7 +158,7 @@ app.post('/api/records', requireAuth, async (req, res) => {
     const d = req.body;
 
     const row = [
-      id, '', now, '', now, d.入力元 || 'フォーム入力',
+      id, req.session.user.email, now, '', now, d.入力元 || 'フォーム入力',
       d.夢主年代 || '', d.夢主性別 || '', d.夢主の状況 || '',
       d['ワーク前に自覚していた悩み'] || '', d['ワーク後に自覚した悩み'] || '',
       d.夢の分類 || '', d.夢の内容 || '',
@@ -273,25 +273,15 @@ app.post('/api/ocr', requireAuth, (req, res, next) => {
       return res.status(400).json({ error: '画像が選択されていません' });
     }
 
-    // Drive upload と Gemini OCR を並行実行
-    const tempId = `tmp-${Date.now()}`;
-
-    const [fileIds, ocrResult] = await Promise.all([
-      // Google Drive に保存
-      Promise.all(files.map((file, i) => {
-        const ext = file.mimetype.split('/')[1] || 'jpg';
-        return uploadToDrive(file.buffer, file.mimetype, `${tempId}_${i + 1}.${ext}`);
-      })),
-      // Gemini OCR
-      (async () => {
-        const parts = files.map(file => ({
-          inline_data: {
-            mime_type: file.mimetype,
-            data: file.buffer.toString('base64'),
-          },
-        }));
-        parts.push({
-          text: `このワークシート画像を読み取り、手書きテキストを抽出してください。
+    // 1. Gemini OCR（先に実行。失敗した場合はDriveアップロードしない）
+    const parts = files.map(file => ({
+      inline_data: {
+        mime_type: file.mimetype,
+        data: file.buffer.toString('base64'),
+      },
+    }));
+    parts.push({
+      text: `このワークシート画像を読み取り、手書きテキストを抽出してください。
 印刷された項目ラベルと手書き内容の両方を読んでください。
 赤ペンや青ペンなど色の異なる書き込みもすべて読んでください。
 読み取れない箇所は空欄のままにしてください。
@@ -304,30 +294,35 @@ app.post('/api/ocr', requireAuth, (req, res, next) => {
   "大高メモ": "大高先生の書き込み・赤ペンコメント（なければ空文字）",
   "夢の分類": "悪夢/繰り返し夢/断片/色のみ/音のみ/その他（記載なければ空文字）"
 }`,
-        });
+    });
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
-        const response = await fetch(GEMINI_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts }] }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const geminiRes = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts }] }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
 
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error('Gemini APIエラー: ' + response.status + ' ' + errText);
-        }
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
+      throw new Error('Gemini APIエラー: ' + geminiRes.status + ' ' + errText);
+    }
 
-        const geminiData = await response.json();
-        const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error('OCR結果の解析に失敗しました');
-        return JSON.parse(jsonMatch[0]);
-      })(),
-    ]);
+    const geminiData = await geminiRes.json();
+    const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('OCR結果の解析に失敗しました');
+    const ocrResult = JSON.parse(jsonMatch[0]);
+
+    // 2. OCR成功後にDriveアップロード（孤立ファイルを防止）
+    const tempId = `tmp-${Date.now()}`;
+    const fileIds = await Promise.all(files.map((file, i) => {
+      const ext = file.mimetype.split('/')[1] || 'jpg';
+      return uploadToDrive(file.buffer, file.mimetype, `${tempId}_${i + 1}.${ext}`);
+    }));
 
     res.json({ ok: true, data: ocrResult, fileIds });
   } catch (err) {

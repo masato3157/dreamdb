@@ -244,7 +244,7 @@
       <input type="file" id="file-input" accept="image/*" multiple>
       <div class="upload-zone-icon">📷</div>
       <div class="upload-zone-label">タップして撮影 または ライブラリから選択<br><small style="font-weight:400;font-size:13px;">PCはドラッグ＆ドロップも可</small></div>
-      <div class="upload-zone-hint">スマホはカメラ直接撮影できます　表・裏など複数枚まとめてOK（最大3枚）</div>
+      <div class="upload-zone-hint">スマホはカメラ直接撮影できます　複数枚まとめてOK（最大3枚・1枚15MBまで）</div>
     </div>
 
     <!-- Preview -->
@@ -403,10 +403,21 @@
     addFiles(Array.from(e.dataTransfer.files));
   });
 
+  const UNSUPPORTED_TYPES = ['image/heic', 'image/heif'];
+  const MAX_FILE_SIZE = 15 * 1024 * 1024;
+
   function addFiles(files) {
     for (const f of files) {
       if (!f.type.startsWith('image/')) continue;
       if (selectedFiles.length >= 3) break;
+      if (UNSUPPORTED_TYPES.includes(f.type.toLowerCase())) {
+        setOcrStatus('error', `HEIC/HEIF形式は非対応です。カメラで直接撮影するか、JPEG/PNG形式で保存してから選択してください。`);
+        continue;
+      }
+      if (f.size > MAX_FILE_SIZE) {
+        setOcrStatus('error', `「${f.name}」は15MBを超えています（${(f.size/1024/1024).toFixed(1)}MB）。ファイルサイズを小さくしてください。`);
+        continue;
+      }
       selectedFiles.push(f);
     }
     renderPreviews();
