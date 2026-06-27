@@ -461,6 +461,27 @@
   };
   const DREAM_TYPE_OPTS = ['悪夢','繰り返し夢','断片','色のみ','音のみ','臭いのみ','味覚のみ','触感のみ','感情のみ','その他'];
 
+  // iOSカメラ画像のFormData送信バグを回避するためCanvas経由でJPEGに変換
+  function normalizeImageFile(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        canvas.toBlob(blob => {
+          if (!blob) return reject(new Error('画像の変換に失敗しました'));
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+        }, 'image/jpeg', 0.92);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('画像の読み込みに失敗しました')); };
+      img.src = url;
+    });
+  }
+
   btnOcr.addEventListener('click', async () => {
     if (selectedFiles.length === 0) return;
 
@@ -468,8 +489,9 @@
     btnOcr.disabled = true;
     ocrStatus.className = 'ocr-status';
 
+    const normalized = await Promise.all(selectedFiles.map(normalizeImageFile));
     const formData = new FormData();
-    selectedFiles.forEach(f => formData.append('images', f));
+    normalized.forEach(f => formData.append('images', f));
 
     try {
       const res = await fetch('/api/ocr', { method: 'POST', body: formData });
