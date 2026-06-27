@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>大高式ドリームワーク 夢分析データベース</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Login View -->
+<div id="view-login" class="view">
+  <div class="login-noise"></div>
+  <div class="login-inner">
+    <div class="login-symbol">夢</div>
+    <h1 class="login-title">大高式ドリームワーク</h1>
+    <p class="login-subtitle">夢分析データベース</p>
+    <button id="btn-google-login" class="btn-google">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+      Googleでサインイン
+    </button>
+    <p class="login-note">アクセス権限のあるGoogleアカウントでサインインしてください</p>
+  </div>
+</div>
+
+<!-- App Shell (shown after login) -->
+<div id="view-app" class="view hidden">
+  <!-- Header -->
+  <header class="app-header">
+    <button id="btn-back" class="btn-back hidden" aria-label="戻る">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <span class="header-title">ドリームワーク DB</span>
+    <div class="header-actions">
+      <button id="btn-ocr-link" class="btn-new" style="background:var(--surface);color:var(--accent);border:1px solid var(--accent);" onclick="location.href='/ocr.html'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        OCR入力
+      </button>
+      <button id="btn-new" class="btn-new">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新規
+      </button>
+      <button id="btn-logout" class="btn-icon" aria-label="ログアウト" title="ログアウト">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- List View -->
+  <div id="view-list" class="inner-view">
+    <!-- Search & Filter -->
+    <div class="search-bar">
+      <div class="search-input-wrap">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="search-input" placeholder="夢の内容・メモを検索…" class="search-input">
+      </div>
+      <button id="btn-filter-toggle" class="btn-filter-toggle" aria-label="フィルター">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      </button>
+    </div>
+
+    <!-- Filter Panel -->
+    <div id="filter-panel" class="filter-panel hidden">
+      <div class="filter-row">
+        <select id="filter-age" class="filter-select"><option value="">年代（すべて）</option><option>10代</option><option>20代</option><option>30代</option><option>40代</option><option>50代</option><option>60代</option><option>70代</option><option>80代以上</option></select>
+        <select id="filter-gender" class="filter-select"><option value="">性別（すべて）</option><option>男性</option><option>女性</option><option>不明</option></select>
+      </div>
+      <div class="filter-row">
+        <select id="filter-worry" class="filter-select"><option value="">ワーク前の悩み（すべて）</option><option>仕事</option><option>家族</option><option>恋愛</option><option>その他人間関係</option><option>健康</option><option>自己肯定感</option><option>その他</option></select>
+        <select id="filter-dream-type" class="filter-select"><option value="">夢の種類（すべて）</option><option>悪夢</option><option>繰り返し夢</option><option>断片</option><option>色のみ</option><option>音のみ</option><option>臭いのみ</option><option>味覚のみ</option><option>触感のみ</option><option>感情のみ</option><option>その他</option></select>
+      </div>
+      <div class="filter-row">
+        <select id="filter-public" class="filter-select"><option value="">公開可否（すべて）</option><option>公開可</option><option>要確認</option><option>非公開</option></select>
+        <button id="btn-filter-reset" class="btn-filter-reset">リセット</button>
+      </div>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="stats-bar">
+      <span id="record-count" class="record-count">— 件</span>
+    </div>
+
+    <!-- Records list -->
+    <div id="records-list" class="records-list">
+      <div class="loading">読み込み中…</div>
+    </div>
+  </div>
+
+  <!-- Form View (new / edit) -->
+  <div id="view-form" class="inner-view hidden">
+    <div id="form-id-badge" class="form-id-badge hidden"></div>
+
+    <form id="dream-form" class="dream-form" novalidate>
+
+      <section class="form-section">
+        <h2 class="section-title">夢主情報</h2>
+        <div class="field">
+          <label class="label required" for="f-age">夢主年代</label>
+          <select id="f-age" name="夢主年代" class="select" required>
+            <option value="">選択…</option>
+            <option>10代</option><option>20代</option><option>30代</option>
+            <option>40代</option><option>50代</option><option>60代</option>
+            <option>70代</option><option>80代以上</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label required" for="f-gender">夢主性別</label>
+          <select id="f-gender" name="夢主性別" class="select" required>
+            <option value="">選択…</option>
+            <option>男性</option><option>女性</option><option>不明</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label required" for="f-situation">夢主の状況</label>
+          <textarea id="f-situation" name="夢主の状況" class="textarea" rows="3" placeholder="セッション時の生活・心理状況" required></textarea>
+        </div>
+        <div class="field">
+          <label class="label" for="f-worry">ワーク前に自覚していた悩み <span class="optional">任意</span></label>
+          <select id="f-worry" name="ワーク前に自覚していた悩み" class="select">
+            <option value="">選択…</option>
+            <option>仕事</option><option>家族</option><option>恋愛</option>
+            <option>その他人間関係</option><option>健康</option><option>自己肯定感</option><option>その他</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label" for="f-worry-after">ワーク後に自覚した悩み <span class="optional">任意</span></label>
+          <select id="f-worry-after" name="ワーク後に自覚した悩み" class="select">
+            <option value="">選択…</option>
+            <option>仕事</option><option>家族</option><option>恋愛</option>
+            <option>その他人間関係</option><option>健康</option><option>自己肯定感</option><option>その他</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h2 class="section-title">夢の記録</h2>
+        <div class="field">
+          <label class="label required" for="f-dream-type">夢の分類</label>
+          <select id="f-dream-type" name="夢の分類" class="select" required>
+            <option value="">選択…</option>
+            <option>悪夢</option><option>繰り返し夢</option><option>断片</option>
+            <option>色のみ</option><option>音のみ</option><option>臭いのみ</option>
+            <option>味覚のみ</option><option>触感のみ</option><option>感情のみ</option><option>その他</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label required" for="f-dream-content">夢の内容</label>
+          <textarea id="f-dream-content" name="夢の内容" class="textarea" rows="6" placeholder="夢主が語った夢の内容をそのまま記録する" required></textarea>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h2 class="section-title">ワーク記録</h2>
+        <div class="field">
+          <label class="label required" for="f-insight">ワーク中の気づき</label>
+          <textarea id="f-insight" name="ワーク中の気づき" class="textarea" rows="4" placeholder="セッション中に夢主が得た気づき" required></textarea>
+        </div>
+        <div class="field">
+          <label class="label" for="f-change">後日談 <span class="optional">任意</span></label>
+          <textarea id="f-change" name="後日談" class="textarea" rows="4" placeholder="後日、変化があった場合のみ記入"></textarea>
+        </div>
+        <div class="field">
+          <label class="label" for="f-memo">大高メモ <span class="optional">任意</span></label>
+          <textarea id="f-memo" name="大高メモ" class="textarea" rows="3" placeholder="所感・分析・特記事項"></textarea>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h2 class="section-title">後から付与</h2>
+        <div class="field">
+          <label class="label" for="f-theme">教材化テーマ <span class="optional">任意</span></label>
+          <input type="text" id="f-theme" name="教材化テーマ" class="input" placeholder="コンテンツ化の切り口">
+        </div>
+        <div class="field">
+          <label class="label" for="f-tags">テーマタグ <span class="optional">任意・カンマ区切り</span></label>
+          <input type="text" id="f-tags" name="テーマタグ" class="input" placeholder="母親,水,再生">
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h2 class="section-title">管理情報</h2>
+        <div class="field">
+          <label class="label required" for="f-source">入力元</label>
+          <select id="f-source" name="入力元" class="select" required>
+            <option value="フォーム入力">フォーム入力</option>
+            <option value="紙ワークシート転記">紙ワークシート転記</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label required" for="f-public">公開可否</label>
+          <select id="f-public" name="公開可否" class="select" required>
+            <option value="要確認" selected>要確認</option>
+            <option value="公開可">公開可</option>
+            <option value="非公開">非公開</option>
+          </select>
+        </div>
+      </section>
+
+      <div class="form-actions">
+        <button type="submit" id="btn-save" class="btn-save">保存する</button>
+        <button type="button" id="btn-cancel" class="btn-cancel">キャンセル</button>
+      </div>
+    </form>
+
+    <div id="form-msg" class="form-msg hidden"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
