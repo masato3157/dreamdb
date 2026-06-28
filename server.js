@@ -280,8 +280,7 @@ app.delete('/api/records/:id', requireAuth, async (req, res) => {
       await Promise.allSettled(fileIds.map(async fileId => {
         try {
           const file = gcs.bucket(GCS_BUCKET_NAME).file(fileId);
-          const [exists] = await file.exists();
-          if (exists) await file.delete();
+          await file.delete({ ignoreNotFound: true });
         } catch (e) {
           console.error('GCS delete error:', fileId, e.message);
         }
