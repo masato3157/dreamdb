@@ -2,11 +2,12 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const { google } = require('googleapis');
+const { Storage } = require('@google-cloud/storage');
 const path = require('path');
 const multer = require('multer');
 const { Readable } = require('stream');
 
-const REQUIRED_ENV = ['SPREADSHEET_ID', 'GEMINI_API_KEY', 'DRIVE_FOLDER_ID', 'SESSION_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI', 'SERVICE_ACCOUNT_KEY'];
+const REQUIRED_ENV = ['SPREADSHEET_ID', 'GEMINI_API_KEY', 'GCS_BUCKET_NAME', 'SESSION_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI', 'SERVICE_ACCOUNT_KEY'];
 const missing = REQUIRED_ENV.filter(k => !process.env[k]);
 if (missing.length > 0) {
   console.error('Missing required env vars:', missing.join(', '));
@@ -18,7 +19,7 @@ const PORT = process.env.PORT || 3460;
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID;
+const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '').split(',').map(e => e.trim());
 
@@ -29,16 +30,34 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI
 );
 
-// Service account for Sheets + Drive API
+// Service account for Sheets + Drive (read fallback) + GCS
 const serviceAuth = new google.auth.GoogleAuth({
   keyFile: process.env.SERVICE_ACCOUNT_KEY,
   scopes: [
     'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/drive.readonly',
   ],
 });
 const sheets = google.sheets({ version: 'v4', auth: serviceAuth });
 const drive = google.drive({ version: 'v3', auth: serviceAuth });
+const gcs = new Storage({ keyFilename: process.env.SERVICE_ACCOUNT_KEY });
+
+let _cachedSheetId = null;
+async function getSheetId() {
+  if (_cachedSheetId !== null) return _cachedSheetId;
+  const res = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+  const sheet = res.data.sheets.find(s => s.properties.title === 'シート1');
+  _cachedSheetId = sheet ? sheet.properties.sheetId : 0;
+  return _cachedSheetId;
+}
+
+// Upload to GCS (service account, no quota issues)
+async function uploadToGCS(buffer, mimeType, filename) {
+  const bucket = gcs.bucket(GCS_BUCKET_NAME);
+  const file = bucket.file(filename);
+  await file.save(buffer, { metadata: { contentType: mimeType } });
+  return filename;
+}
 
 // Middleware
 app.set('trust proxy', 1);
@@ -55,22 +74,6 @@ app.use(session({
 function requireAuth(req, res, next) {
   if (req.session.user) return next();
   res.status(401).json({ error: 'Unauthorized' });
-}
-
-// Drive upload helper
-async function uploadToDrive(buffer, mimeType, filename) {
-  const res = await drive.files.create({
-    requestBody: {
-      name: filename,
-      parents: [DRIVE_FOLDER_ID],
-    },
-    media: {
-      mimeType,
-      body: Readable.from(buffer),
-    },
-    fields: 'id',
-  });
-  return res.data.id;
 }
 
 // --- Auth routes ---
@@ -237,6 +240,61 @@ app.put('/api/records/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Delete record
+app.delete('/api/records/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const readRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'シート1!A:A',
+    });
+    const rows = readRes.data.values || [];
+    const rowIdx = rows.findIndex(r => r[0] === id);
+    if (rowIdx < 1) return res.status(404).json({ error: 'レコードが見つかりません' });
+
+    const imgRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `シート1!W${rowIdx + 1}`,
+    });
+    const imageId = imgRes.data.values?.[0]?.[0] || '';
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      resource: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId: await getSheetId(),
+              dimension: 'ROWS',
+              startIndex: rowIdx,
+              endIndex: rowIdx + 1,
+            },
+          },
+        }],
+      },
+    });
+
+    if (imageId) {
+      const fileIds = imageId.split(',').map(s => s.trim()).filter(Boolean);
+      await Promise.allSettled(fileIds.map(async fileId => {
+        try {
+          const file = gcs.bucket(GCS_BUCKET_NAME).file(fileId);
+          const [exists] = await file.exists();
+          if (exists) await file.delete();
+        } catch (e) {
+          console.error('GCS delete error:', fileId, e.message);
+        }
+      }));
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Delete error:', err.message);
+    res.status(500).json({ error: '削除に失敗しました: ' + err.message });
+  }
+});
+
 // Initialize sheet headers
 app.post('/api/init-sheet', requireAuth, async (req, res) => {
   const headers = [
@@ -317,11 +375,11 @@ app.post('/api/ocr', requireAuth, (req, res, next) => {
     if (!jsonMatch) throw new Error('OCR結果の解析に失敗しました');
     const ocrResult = JSON.parse(jsonMatch[0]);
 
-    // 2. OCR成功後にDriveアップロード（孤立ファイルを防止）
+    // 2. OCR成功後にGCSアップロード（孤立ファイルを防止）
     const tempId = `tmp-${Date.now()}`;
     const fileIds = await Promise.all(files.map((file, i) => {
       const ext = file.mimetype.split('/')[1] || 'jpg';
-      return uploadToDrive(file.buffer, file.mimetype, `${tempId}_${i + 1}.${ext}`);
+      return uploadToGCS(file.buffer, file.mimetype, `${tempId}_${i + 1}.${ext}`);
     }));
 
     res.json({ ok: true, data: ocrResult, fileIds });
@@ -331,10 +389,35 @@ app.post('/api/ocr', requireAuth, (req, res, next) => {
   }
 });
 
-// Drive画像配信（認証必須）
+// 画像配信（認証必須）: GCS優先、旧DriveファイルはDriveフォールバック
 app.get('/api/images/:fileId', requireAuth, async (req, res) => {
+  const { fileId } = req.params;
+
+  // GCSから取得（新規ファイル）
   try {
-    const { fileId } = req.params;
+    const bucket = gcs.bucket(GCS_BUCKET_NAME);
+    const file = bucket.file(fileId);
+    const [exists] = await file.exists();
+    if (exists) {
+      const [metadata] = await file.getMetadata();
+      res.setHeader('Content-Type', metadata.contentType || 'image/jpeg');
+      res.setHeader('Cache-Control', 'private, max-age=3600');
+      file.createReadStream()
+        .on('error', err => {
+          console.error('GCS stream error:', err.message);
+          if (!res.headersSent) res.status(500).json({ error: '画像の読み込みに失敗しました' });
+          else res.destroy();
+        })
+        .pipe(res);
+      return;
+    }
+  } catch (e) {
+    console.warn('GCS fetch failed, falling back to Drive:', e.message);
+    // fall through to Drive
+  }
+
+  // Driveフォールバック（旧ファイル対応）
+  try {
     const driveRes = await drive.files.get(
       { fileId, alt: 'media' },
       { responseType: 'stream' }
@@ -343,7 +426,7 @@ app.get('/api/images/:fileId', requireAuth, async (req, res) => {
     res.setHeader('Cache-Control', 'private, max-age=3600');
     driveRes.data.pipe(res);
   } catch (err) {
-    console.error('Drive fetch error:', err.message);
+    console.error('Image fetch error:', err.message);
     res.status(404).json({ error: '画像が見つかりません' });
   }
 });

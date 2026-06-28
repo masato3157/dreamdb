@@ -502,7 +502,7 @@
         return;
       }
 
-      pendingFileIds = json.fileIds || [];
+      pendingFileIds = [...pendingFileIds, ...(json.fileIds || [])];
 
       const data = json.data;
       for (const [key, elId] of Object.entries(OCR_FIELDS)) {

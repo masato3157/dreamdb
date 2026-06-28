@@ -27,6 +27,16 @@
   const btnSave = document.getElementById('btn-save');
   const btnCancel = document.getElementById('btn-cancel');
   const btnFilterReset = document.getElementById('btn-filter-reset');
+  const imageSection = document.getElementById('image-section');
+  const btnViewImages = document.getElementById('btn-view-images');
+  const deleteSection = document.getElementById('delete-section');
+  const btnDelete = document.getElementById('btn-delete');
+  const imageModal = document.getElementById('image-modal');
+  const imageModalBody = document.getElementById('image-modal-body');
+  const imageModalClose = document.getElementById('image-modal-close');
+  const imageModalBackdrop = document.getElementById('image-modal-backdrop');
+  let pendingBlobUrls = [];
+  let imageLoadAborted = false;
 
   // Field map: field name → element id
   const FIELD_IDS = {
@@ -193,8 +203,13 @@
         if (el && record[field] !== undefined) el.value = record[field];
       });
       btnSave.textContent = '変更を保存';
+      const hasImages = (record['画像ID'] || '').trim().length > 0;
+      imageSection.classList.toggle('hidden', !hasImages);
+      deleteSection.classList.remove('hidden');
     } else {
       formIdBadge.classList.add('hidden');
+      imageSection.classList.add('hidden');
+      deleteSection.classList.add('hidden');
       // Set defaults
       document.getElementById('f-public').value = '要確認';
       document.getElementById('f-source').value = 'フォーム入力';
@@ -311,6 +326,71 @@
   function esc(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+
+  // ── Image Viewer ─────────────────────────────────
+  function closeImageModal() {
+    imageModal.classList.add('hidden');
+    imageLoadAborted = true;
+    pendingBlobUrls.forEach(url => URL.revokeObjectURL(url));
+    pendingBlobUrls = [];
+    imageModalBody.innerHTML = '';
+  }
+
+  btnViewImages.addEventListener('click', async () => {
+    if (!currentRecord) return;
+    const ids = (currentRecord['画像ID'] || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (!ids.length) return;
+
+    pendingBlobUrls.forEach(url => URL.revokeObjectURL(url));
+    pendingBlobUrls = [];
+    imageLoadAborted = false;
+
+    imageModalBody.innerHTML = '<div class="loading" style="color:#ccc;padding:16px;">読み込み中…</div>';
+    imageModal.classList.remove('hidden');
+
+    try {
+      const urls = await Promise.all(ids.map(async id => {
+        const res = await fetch(`/api/images/${encodeURIComponent(id)}`);
+        if (!res.ok) throw new Error(`画像取得失敗 (${id})`);
+        return URL.createObjectURL(await res.blob());
+      }));
+      if (imageLoadAborted) {
+        urls.forEach(url => URL.revokeObjectURL(url));
+        return;
+      }
+      pendingBlobUrls = urls;
+      imageModalBody.innerHTML = urls.map(url =>
+        `<img src="${url}" style="max-width:80vw;max-height:75vh;object-fit:contain;border-radius:6px;display:block;">`
+      ).join('');
+    } catch (e) {
+      if (!imageLoadAborted) {
+        imageModalBody.innerHTML = `<p style="color:#f88;padding:16px;">${esc(e.message)}</p>`;
+      }
+    }
+  });
+
+  imageModalClose.addEventListener('click', closeImageModal);
+  imageModalBackdrop.addEventListener('click', closeImageModal);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeImageModal();
+  });
+
+  btnDelete.addEventListener('click', async () => {
+    const id = formIdBadge.textContent;
+    if (!id) return;
+    if (!confirm(`レコード「${id}」を削除します。この操作は取り消せません。よろしいですか？`)) return;
+    try {
+      const res = await api(`/api/records/${encodeURIComponent(id)}`, 'DELETE');
+      if (res.ok) {
+        await loadRecords();
+        showListView();
+      } else {
+        alert('削除に失敗しました: ' + (res.error || '不明なエラー'));
+      }
+    } catch (e) {
+      alert('削除に失敗しました: ' + e.message);
+    }
+  });
 
   // ── Start ────────────────────────────────────────
   init();
