@@ -482,7 +482,15 @@
     btnOcr.disabled = true;
     ocrStatus.className = 'ocr-status';
 
-    const images = await Promise.all(selectedFiles.map(fileToBase64));
+    let images;
+    try {
+      images = await Promise.all(selectedFiles.map(fileToBase64));
+    } catch (err) {
+      setOcrStatus('error', '画像の読み込みに失敗しました: ' + err.message);
+      btnOcr.classList.remove('loading');
+      btnOcr.disabled = false;
+      return;
+    }
 
     try {
       const res = await fetch('/api/ocr', {
