@@ -474,7 +474,7 @@
         URL.revokeObjectURL(url);
         canvas.toBlob(blob => {
           if (!blob) return reject(new Error('画像の変換に失敗しました'));
-          resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+          resolve(new File([blob], `image_${Date.now()}.jpg`, { type: 'image/jpeg' }));
         }, 'image/jpeg', 0.92);
       };
       img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('画像の読み込みに失敗しました')); };
