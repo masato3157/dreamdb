@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自由文入力 — 夢分析DB</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .ocr-page {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 0 0 80px;
+    }
+    .ocr-card {
+      margin: 16px 16px 0;
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .ocr-actions {
+      padding: 16px 0 0;
+    }
+    .btn-ocr {
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      transition: opacity 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-ocr:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-ocr:hover:not(:disabled) { opacity: 0.88; }
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    .btn-ocr.loading .spinner { display: block; }
+    .btn-ocr.loading .btn-ocr-text { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .ocr-status {
+      margin: 10px 16px 0;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+    .ocr-status.success {
+      background: rgba(52, 199, 89, 0.12);
+      color: #276749;
+      border: 1px solid rgba(52, 199, 89, 0.25);
+      display: block;
+    }
+    .ocr-status.error {
+      background: rgba(255, 59, 48, 0.1);
+      color: #c53030;
+      border: 1px solid rgba(255, 59, 48, 0.2);
+      display: block;
+    }
+    .form-divider {
+      margin: 24px 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .form-divider-line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+    .form-divider-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+    }
+    .ocr-page .form-section {
+      margin: 0 16px;
+      padding: 16px 0 0;
+      border-top: none;
+      border-bottom: none;
+    }
+    .ocr-page .dream-form {
+      padding: 0;
+    }
+    .ocr-page .form-actions {
+      margin: 24px 16px 0;
+      padding: 0;
+    }
+    .ocr-filled {
+      border-color: var(--accent) !important;
+      box-shadow: 0 0 0 2px rgba(107,99,246,0.15);
+      transition: border-color 0.4s, box-shadow 0.4s;
+    }
+    .ocr-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 16px 0;
+    }
+    .ocr-header-back {
+      background: none;
+      border: none;
+      color: var(--accent);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 14px;
+      font-family: var(--font-sans);
+      padding: 0;
+    }
+    .ocr-header-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+      font-family: var(--font-sans);
+    }
+    .success-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 14px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="view-login" class="view hidden">
+  <div class="login-noise"></div>
+  <div class="login-inner">
+    <div class="login-symbol">夢</div>
+    <h1 class="login-title">大高式ドリームワーク</h1>
+    <p class="login-subtitle">夢分析データベース</p>
+    <button id="btn-google-login" class="btn-google">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+      Googleでサインイン
+    </button>
+    <p class="login-note">アクセス権限のあるGoogleアカウントでサインインしてください</p>
+  </div>
+</div>
+
+<div id="view-app" class="view hidden">
+  <div class="ocr-page">
+    <div class="ocr-header">
+      <button class="ocr-header-back" onclick="location.href='/'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        一覧へ
+      </button>
+      <span class="ocr-header-title">自由文入力</span>
+    </div>
+
+    <section id="step-input" class="ocr-card">
+      <div class="field">
+        <label class="label required" for="free-text">自由記録</label>
+        <textarea id="free-text" class="textarea" rows="15" placeholder="夢の内容、ワーク中の気づき、後日談など、自由に記録してください。
+音声入力も利用できます。"></textarea>
+      </div>
+      <div class="ocr-actions">
+        <button type="button" class="btn-ocr" id="btn-analyze">
+          <div class="spinner"></div>
+          <span class="btn-ocr-text">AIに分析してもらう</span>
+        </button>
+      </div>
+    </section>
+    <div class="ocr-status" id="analyze-status"></div>
+
+    <section id="step-confirm" class="hidden">
+      <form id="dream-form" class="dream-form" novalidate>
+        <input type="hidden" name="入力元" value="自由文入力">
+
+        <div class="form-divider">
+          <div class="form-divider-line"></div>
+          <div class="form-divider-label">AI分析結果（修正可）</div>
+          <div class="form-divider-line"></div>
+        </div>
+
+        <section class="form-section">
+          <div class="field">
+            <label class="label" for="f-age">夢主年代</label>
+            <select id="f-age" name="夢主年代" class="select">
+              <option value="">選択…</option>
+              <option>10代</option><option>20代</option><option>30代</option>
+              <option>40代</option><option>50代</option><option>60代以上</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label" for="f-gender">夢主性別</label>
+            <select id="f-gender" name="夢主性別" class="select">
+              <option value="">選択…</option>
+              <option>男性</option><option>女性</option><option>その他</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label" for="f-situation">夢主の状況</label>
+            <textarea id="f-situation" name="夢主の状況" class="textarea" rows="3"></textarea>
+          </div>
+          <div class="field">
+            <label class="label" for="f-worry-before">ワーク前に自覚していた悩み</label>
+            <textarea id="f-worry-before" name="ワーク前に自覚していた悩み" class="textarea" rows="3"></textarea>
+          </div>
+          <div class="field">
+            <label class="label" for="f-worry-after">ワーク後に自覚した悩み</label>
+            <textarea id="f-worry-after" name="ワーク後に自覚した悩み" class="textarea" rows="3"></textarea>
+          </div>
+          <div class="field">
+            <label class="label" for="f-dream-type">夢の分類</label>
+            <select id="f-dream-type" name="夢の分類" class="select">
+              <option value="">選択…</option>
+              <option>悪夢</option><option>繰り返し夢</option><option>断片</option>
+              <option>色のみ</option><option>音のみ</option><option>臭いのみ</option>
+              <option>味覚のみ</option><option>触感のみ</option><option>感情のみ</option><option>その他</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label" for="f-dream-content">夢の内容</label>
+            <textarea id="f-dream-content" name="夢の内容" class="textarea" rows="6"></textarea>
+          </div>
+          <div class="field">
+            <label class="label" for="f-insight">ワーク中の気づき</label>
+            <textarea id="f-insight" name="ワーク中の気づき" class="textarea" rows="4"></textarea>
+          </div>
+          <div class="field">
+            <label class="label" for="f-change">後日談</label>
+            <textarea id="f-change" name="後日談" class="textarea" rows="3"></textarea>
+          </div>
+          <div class="field">
+            <label class="label" for="f-memo">大高メモ</label>
+            <textarea id="f-memo" name="大高メモ" class="textarea" rows="3"></textarea>
+          </div>
+          <div class="field">
+            <label class="label" for="f-public">公開可否</label>
+            <select id="f-public" name="公開可否" class="select">
+              <option value="要確認" selected>要確認</option>
+              <option value="公開可">公開可</option>
+              <option value="非公開">非公開</option>
+            </select>
+          </div>
+        </section>
+
+        <div class="form-actions">
+          <button type="submit" id="btn-save" class="btn-save">保存する</button>
+          <button type="button" id="btn-retry" class="btn-cancel">やり直す</button>
+        </div>
+      </form>
+      <div id="form-msg" class="form-msg hidden"></div>
+    </section>
+
+    <section id="step-saved" class="ocr-card hidden">
+      <div id="saved-msg" class="form-msg success" style="margin:0;">保存しました。続けて入力しますか？</div>
+      <div class="success-actions">
+        <button type="button" id="btn-continue" class="btn-save">続けて入力する</button>
+        <button type="button" class="btn-cancel" onclick="location.href='/'">一覧に戻る</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(async () => {
+  const meRes = await fetch('/api/me');
+  const { user } = await meRes.json();
+
+  if (!user) {
+    location.href = '/';
+    return;
+  }
+
+  document.getElementById('view-app').classList.remove('hidden');
+
+  const stepInput = document.getElementById('step-input');
+  const stepConfirm = document.getElementById('step-confirm');
+  const stepSaved = document.getElementById('step-saved');
+  const freeText = document.getElementById('free-text');
+  const btnAnalyze = document.getElementById('btn-analyze');
+  const analyzeStatus = document.getElementById('analyze-status');
+  const form = document.getElementById('dream-form');
+  const formMsg = document.getElementById('form-msg');
+  const btnSave = document.getElementById('btn-save');
+
+  const FIELD_IDS = {
+    '夢主年代': 'f-age',
+    '夢主性別': 'f-gender',
+    '夢主の状況': 'f-situation',
+    'ワーク前に自覚していた悩み': 'f-worry-before',
+    'ワーク後に自覚した悩み': 'f-worry-after',
+    '夢の分類': 'f-dream-type',
+    '夢の内容': 'f-dream-content',
+    'ワーク中の気づき': 'f-insight',
+    '後日談': 'f-change',
+    '大高メモ': 'f-memo',
+  };
+  const OPTIONS = {
+    '夢主年代': ['10代','20代','30代','40代','50代','60代以上'],
+    '夢主性別': ['男性','女性','その他'],
+    '夢の分類': ['悪夢','繰り返し夢','断片','色のみ','音のみ','臭いのみ','味覚のみ','触感のみ','感情のみ','その他'],
+  };
+
+  function setStatus(type, msg) {
+    analyzeStatus.className = 'ocr-status ' + type;
+    analyzeStatus.textContent = msg;
+  }
+
+  function clearStatus() {
+    analyzeStatus.className = 'ocr-status';
+    analyzeStatus.textContent = '';
+  }
+
+  function setSelectValue(el, key, value) {
+    if (!value) {
+      el.value = '';
+      return;
+    }
+    const matched = OPTIONS[key].find(option => value === option || value.includes(option));
+    el.value = matched || '';
+  }
+
+  function fillForm(data) {
+    for (const [key, elId] of Object.entries(FIELD_IDS)) {
+      const el = document.getElementById(elId);
+      if (!el) continue;
+      const value = data[key] || '';
+      if (el.tagName === 'SELECT') setSelectValue(el, key, value);
+      else el.value = value;
+      if (value) {
+        el.classList.add('ocr-filled');
+        setTimeout(() => el.classList.remove('ocr-filled'), 3000);
+      }
+    }
+  }
+
+  function showInput() {
+    stepInput.classList.remove('hidden');
+    stepConfirm.classList.add('hidden');
+    stepSaved.classList.add('hidden');
+    formMsg.classList.add('hidden');
+    clearStatus();
+  }
+
+  btnAnalyze.addEventListener('click', async () => {
+    const text = freeText.value.trim();
+    if (!text) {
+      setStatus('error', 'テキストが入力されていません');
+      freeText.focus();
+      return;
+    }
+
+    btnAnalyze.classList.add('loading');
+    btnAnalyze.disabled = true;
+    clearStatus();
+
+    try {
+      const res = await fetch('/api/analyze-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) throw new Error(json.error || 'AI分析に失敗しました');
+
+      fillForm(json.data || {});
+      stepInput.classList.add('hidden');
+      stepConfirm.classList.remove('hidden');
+      setStatus('success', '分析が完了しました。内容を確認・修正してから保存してください。');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      setStatus('error', 'エラー: ' + err.message);
+    } finally {
+      btnAnalyze.classList.remove('loading');
+      btnAnalyze.disabled = false;
+    }
+  });
+
+  document.getElementById('btn-retry').addEventListener('click', showInput);
+
+  document.getElementById('btn-continue').addEventListener('click', () => {
+    freeText.value = '';
+    form.reset();
+    btnSave.disabled = false;
+    btnSave.textContent = '保存する';
+    showInput();
+    freeText.focus();
+  });
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+
+    const data = {};
+    new FormData(form).forEach((v, k) => { data[k] = v; });
+
+    btnSave.disabled = true;
+    btnSave.textContent = '保存中…';
+    formMsg.classList.add('hidden');
+
+    try {
+      const res = await fetch('/api/records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) throw new Error(json.error || '保存に失敗しました');
+
+      stepConfirm.classList.add('hidden');
+      stepSaved.classList.remove('hidden');
+      clearStatus();
+      document.getElementById('saved-msg').textContent = `保存しました (${json.id})。続けて入力しますか？`;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      formMsg.className = 'form-msg error';
+      formMsg.textContent = 'エラー: ' + err.message;
+      formMsg.classList.remove('hidden');
+      btnSave.disabled = false;
+      btnSave.textContent = '保存する';
+    }
+  });
+})();
+</script>
+</body>
+</html>

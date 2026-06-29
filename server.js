@@ -388,6 +388,64 @@ app.post('/api/ocr', requireAuth, (req, res, next) => {
   }
 });
 
+// テキスト分析: 自由文 → 全フィールド構造化
+app.post('/api/analyze-text', requireAuth, async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: 'テキストが入力されていません' });
+    }
+
+    const prompt = `あなたは夢分析の専門家・大高ゆうこのアシスタントです。
+以下のテキストは、夢ワークセッションの記録です。内容を読み取り、各フィールドに当てはまる情報を抽出してください。
+
+テキスト:
+"""
+${text}
+"""
+
+必ずJSONのみを返してください（説明文・コードブロック不要）。情報がない項目は空文字にしてください:
+{
+  "夢主年代": "10代/20代/30代/40代/50代/60代以上 のいずれか。記載がなければ空文字",
+  "夢主性別": "男性/女性/その他 のいずれか。記載がなければ空文字",
+  "夢主の状況": "夢を見た人の当時の状況・背景",
+  "ワーク前に自覚していた悩み": "ワーク前に本人が自覚していた悩み・問題",
+  "ワーク後に自覚した悩み": "ワーク後に新たに気づいた悩み・問題",
+  "夢の分類": "悪夢/繰り返し夢/断片/色のみ/音のみ/臭いのみ/味覚のみ/触感のみ/感情のみ/その他 のいずれか。記載がなければ空文字",
+  "夢の内容": "夢の本文・ストーリー",
+  "ワーク中の気づき": "ワーク中に得られた気づき・洞察",
+  "後日談": "その後の変化・後日談",
+  "大高メモ": "特記事項・大高先生のメモ"
+}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const geminiRes = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
+      throw new Error('Gemini APIエラー: ' + geminiRes.status + ' ' + errText);
+    }
+
+    const geminiData = await geminiRes.json();
+    const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AI分析結果の解析に失敗しました');
+    const result = JSON.parse(jsonMatch[0]);
+
+    res.json({ ok: true, data: result });
+  } catch (err) {
+    console.error('analyze-text error:', err.message);
+    res.status(500).json({ error: 'AI分析エラー: ' + err.message });
+  }
+});
+
 // 画像配信（認証必須）: GCS優先、旧DriveファイルはDriveフォールバック
 app.get('/api/images/:fileId', requireAuth, async (req, res) => {
   const { fileId } = req.params;
