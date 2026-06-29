@@ -61,7 +61,7 @@ async function uploadToGCS(buffer, mimeType, filename) {
 
 // Middleware
 app.set('trust proxy', 1);
-app.use(express.json());
+app.use(express.json({ limit: '30mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret: process.env.SESSION_SECRET,
@@ -317,24 +317,19 @@ app.post('/api/init-sheet', requireAuth, async (req, res) => {
   }
 });
 
-// OCR: 画像 → Drive保存 + Gemini OCR → 構造化データ
-app.post('/api/ocr', requireAuth, (req, res, next) => {
-  upload.array('images', 3)(req, res, err => {
-    if (err) return res.status(400).json({ error: 'ファイルエラー: ' + err.message });
-    next();
-  });
-}, async (req, res) => {
+// OCR: 画像(base64+JSON) → Gemini OCR → GCS保存 → 構造化データ
+app.post('/api/ocr', requireAuth, async (req, res) => {
   try {
-    const files = req.files;
-    if (!files || files.length === 0) {
+    const images = req.body.images;
+    if (!images || images.length === 0) {
       return res.status(400).json({ error: '画像が選択されていません' });
     }
 
-    // 1. Gemini OCR（先に実行。失敗した場合はDriveアップロードしない）
-    const parts = files.map(file => ({
+    // 1. Gemini OCR（先に実行。失敗した場合はGCSアップロードしない）
+    const parts = images.map(img => ({
       inline_data: {
-        mime_type: file.mimetype,
-        data: file.buffer.toString('base64'),
+        mime_type: img.type || 'image/jpeg',
+        data: img.data,
       },
     }));
     parts.push({
@@ -376,9 +371,11 @@ app.post('/api/ocr', requireAuth, (req, res, next) => {
 
     // 2. OCR成功後にGCSアップロード（孤立ファイルを防止）
     const tempId = `tmp-${Date.now()}`;
-    const fileIds = await Promise.all(files.map((file, i) => {
-      const ext = file.mimetype.split('/')[1] || 'jpg';
-      return uploadToGCS(file.buffer, file.mimetype, `${tempId}_${i + 1}.${ext}`);
+    const fileIds = await Promise.all(images.map((img, i) => {
+      const mimeType = img.type || 'image/jpeg';
+      const ext = mimeType.split('/')[1] || 'jpg';
+      const buffer = Buffer.from(img.data, 'base64');
+      return uploadToGCS(buffer, mimeType, `${tempId}_${i + 1}.${ext}`);
     }));
 
     res.json({ ok: true, data: ocrResult, fileIds });
