@@ -195,6 +195,10 @@
 
         <section class="form-section">
           <div class="field">
+            <label class="label" for="f-title">タイトル</label>
+            <input type="text" id="f-title" name="タイトル" class="input">
+          </div>
+          <div class="field">
             <label class="label" for="f-age">夢主年代</label>
             <select id="f-age" name="夢主年代" class="select">
               <option value="">選択…</option>
@@ -254,6 +258,15 @@
               <option value="非公開">非公開</option>
             </select>
           </div>
+          <div class="field">
+            <label class="label" for="f-work-type">ワーク種別</label>
+            <select id="f-work-type" name="ワーク種別" class="select">
+              <option value="個別セッション" selected>個別セッション</option>
+              <option value="グループセッション">グループセッション</option>
+              <option value="合宿リトリート">合宿リトリート</option>
+              <option value="その他">その他</option>
+            </select>
+          </div>
         </section>
 
         <div class="form-actions">
@@ -297,6 +310,8 @@
   const btnSave = document.getElementById('btn-save');
 
   const FIELD_IDS = {
+    'タイトル': 'f-title',
+    'ワーク種別': 'f-work-type',
     '夢主年代': 'f-age',
     '夢主性別': 'f-gender',
     '夢主の状況': 'f-situation',
@@ -312,6 +327,7 @@
     '夢主年代': ['10代','20代','30代','40代','50代','60代以上'],
     '夢主性別': ['男性','女性','その他'],
     '夢の分類': ['悪夢','繰り返し夢','断片','色のみ','音のみ','臭いのみ','味覚のみ','触感のみ','感情のみ','その他'],
+    'ワーク種別': ['個別セッション','グループセッション','合宿リトリート','その他'],
   };
 
   function setStatus(type, msg) {
@@ -326,6 +342,10 @@
 
   function setSelectValue(el, key, value) {
     if (!value) {
+      if (key === 'ワーク種別') {
+        el.value = '個別セッション';
+        return;
+      }
       el.value = '';
       return;
     }

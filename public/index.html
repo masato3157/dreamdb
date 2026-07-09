@@ -155,6 +155,10 @@
       <section class="form-section">
         <h2 class="section-title">夢の記録</h2>
         <div class="field">
+          <label class="label required" for="f-title">タイトル</label>
+          <input type="text" id="f-title" name="タイトル" class="input" placeholder="夢の内容を表す短いタイトル" required>
+        </div>
+        <div class="field">
           <label class="label required" for="f-dream-type">夢の分類</label>
           <select id="f-dream-type" name="夢の分類" class="select" required>
             <option value="">選択…</option>
@@ -171,6 +175,15 @@
 
       <section class="form-section">
         <h2 class="section-title">ワーク記録</h2>
+        <div class="field">
+          <label class="label required" for="f-work-type">ワーク種別</label>
+          <select id="f-work-type" name="ワーク種別" class="select" required>
+            <option value="個別セッション" selected>個別セッション</option>
+            <option value="グループセッション">グループセッション</option>
+            <option value="合宿リトリート">合宿リトリート</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
         <div class="field">
           <label class="label required" for="f-insight">ワーク中の気づき</label>
           <textarea id="f-insight" name="ワーク中の気づき" class="textarea" rows="4" placeholder="セッション中に夢主が得た気づき" required></textarea>

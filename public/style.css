@@ -298,9 +298,9 @@ input, select, textarea { font-family: inherit; }
 
 .loading, .empty-state {
   text-align: center;
-  color: var(--text-dim);
+  color: var(--text-pale);
   padding: 3rem 1rem;
-  font-size: 0.875rem;
+  font-size: 0.95rem;
 }
 
 .record-card {
@@ -329,14 +329,14 @@ input, select, textarea { font-family: inherit; }
 
 .record-id {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   color: var(--accent);
   letter-spacing: 0.05em;
 }
 
 .record-date {
-  font-size: 0.7rem;
-  color: var(--text-dim);
+  font-size: 0.8rem;
+  color: var(--text-pale);
 }
 
 .record-tags {
@@ -346,7 +346,7 @@ input, select, textarea { font-family: inherit; }
 }
 
 .tag {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   background: rgba(123, 111, 160, 0.2);
   color: var(--accent-lt);
   border: 1px solid rgba(123, 111, 160, 0.3);
@@ -359,8 +359,8 @@ input, select, textarea { font-family: inherit; }
 .tag.public-check { background: rgba(237, 137, 54, 0.15); color: #f6ad55; border-color: rgba(237,137,54,0.3); }
 
 .record-preview {
-  font-size: 0.8rem;
-  color: var(--text-dim);
+  font-size: 0.9rem;
+  color: var(--text-pale);
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;

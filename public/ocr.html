@@ -271,6 +271,10 @@
 
       <section class="form-section">
         <div class="field">
+          <label class="label required" for="f-title">タイトル</label>
+          <input type="text" id="f-title" name="タイトル" class="input" placeholder="OCR実行後に自動入力されます" required>
+        </div>
+        <div class="field">
           <label class="label required" for="f-dream-content">夢の内容</label>
           <textarea id="f-dream-content" name="夢の内容" class="textarea" rows="6" placeholder="OCR実行後に自動入力されます" required></textarea>
         </div>
@@ -349,6 +353,15 @@
       </div>
 
       <section class="form-section">
+        <div class="field">
+          <label class="label required" for="f-work-type">ワーク種別</label>
+          <select id="f-work-type" name="ワーク種別" class="select" required>
+            <option value="個別セッション" selected>個別セッション</option>
+            <option value="グループセッション">グループセッション</option>
+            <option value="合宿リトリート">合宿リトリート</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
         <div class="field">
           <label class="label required" for="f-public">公開可否</label>
           <select id="f-public" name="公開可否" class="select" required>
@@ -455,12 +468,14 @@
   }
 
   const OCR_FIELDS = {
+    'タイトル': 'f-title',
     '夢の内容': 'f-dream-content',
     'ワーク中の気づき': 'f-insight',
     '後日談': 'f-change',
     '大高メモ': 'f-memo',
   };
   const DREAM_TYPE_OPTS = ['悪夢','繰り返し夢','断片','色のみ','音のみ','臭いのみ','味覚のみ','触感のみ','感情のみ','その他'];
+  const WORK_TYPE_OPTS = ['個別セッション','グループセッション','合宿リトリート','その他'];
 
   // iOS WebKitのFormData/multipartバグを回避するためFileReaderでbase64エンコード
   function fileToBase64(file) {
@@ -521,6 +536,11 @@
         const sel = document.getElementById('f-dream-type');
         const matched = DREAM_TYPE_OPTS.find(o => data['夢の分類'].includes(o));
         if (matched) sel.value = matched;
+      }
+      if (data['ワーク種別']) {
+        const sel = document.getElementById('f-work-type');
+        const matched = WORK_TYPE_OPTS.find(o => data['ワーク種別'].includes(o));
+        sel.value = matched || '個別セッション';
       }
 
       setOcrStatus('success', `読み取り完了（画像${pendingFileIds.length}枚保存済）。内容を確認・修正してから保存してください。`);

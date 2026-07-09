@@ -22,6 +22,7 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemi
 const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '').split(',').map(e => e.trim());
+const WORK_TYPES = ['個別セッション', 'グループセッション', '合宿リトリート', 'その他'];
 
 // Google OAuth2 client
 const oauth2Client = new google.auth.OAuth2(
@@ -51,6 +52,19 @@ async function getSheetId() {
   return _cachedSheetId;
 }
 
+function normalizeAiRecordFields(data) {
+  const result = data && typeof data === 'object' ? data : {};
+  if (!result.タイトル) {
+    const dreamContent = String(result.夢の内容 || '').replace(/\s+/g, ' ').trim();
+    result.タイトル = dreamContent ? dreamContent.slice(0, 30) : '';
+  }
+  if (!WORK_TYPES.includes(result.ワーク種別)) {
+    const matched = WORK_TYPES.find(type => String(result.ワーク種別 || '').includes(type));
+    result.ワーク種別 = matched || '個別セッション';
+  }
+  return result;
+}
+
 // Upload to GCS (service account, no quota issues)
 async function uploadToGCS(buffer, mimeType, filename) {
   const bucket = gcs.bucket(GCS_BUCKET_NAME);
@@ -72,7 +86,8 @@ app.use(session({
 
 // Auth middleware
 function requireAuth(req, res, next) {
-  if (req.session.user) return next();
+  const email = req.session.user && req.session.user.email;
+  if (typeof email === 'string' && email.trim()) return next();
   res.status(401).json({ error: 'Unauthorized' });
 }
 
@@ -156,6 +171,11 @@ async function getNextId() {
 // Create record
 app.post('/api/records', requireAuth, async (req, res) => {
   try {
+    const email = req.session.user && req.session.user.email;
+    if (typeof email !== 'string' || !email.trim()) {
+      return res.status(401).json({ error: '認証情報にメールアドレスがありません。再ログインしてください。' });
+    }
+
     const now = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
     const id = await getNextId();
     const d = req.body;
@@ -170,6 +190,8 @@ app.post('/api/records', requireAuth, async (req, res) => {
       '', '',  // 教材化テーマ, テーマタグ
       '', '', '',  // SNS化しやすさ, 講座化しやすさ, 埋込ベクトル
       d.画像ID || '',  // 画像ID (Google Drive, comma-separated)
+      d.タイトル || '',
+      d.ワーク種別 || '個別セッション',
     ];
 
     await sheets.spreadsheets.values.append({
@@ -224,6 +246,8 @@ app.put('/api/records/:id', requireAuth, async (req, res) => {
       d.教材化テーマ || '', d.テーマタグ || '',
       existing[19] || '', existing[20] || '', existing[21] || '',
       existing[22] || '',  // 画像ID は更新時も既存値を保持
+      d.タイトル || '',
+      d.ワーク種別 || existing[24] || '個別セッション',
     ];
 
     await sheets.spreadsheets.values.update({
@@ -302,7 +326,8 @@ app.post('/api/init-sheet', requireAuth, async (req, res) => {
     '夢の分類', '夢の内容',
     'ワーク中の気づき', '後日談', '大高メモ',
     '公開可否', '教材化テーマ', 'テーマタグ',
-    'SNS化しやすさ', '講座化しやすさ', '埋込ベクトル', '画像ID'
+    'SNS化しやすさ', '講座化しやすさ', '埋込ベクトル', '画像ID',
+    'タイトル', 'ワーク種別'
   ];
   try {
     await sheets.spreadsheets.values.update({
@@ -340,6 +365,8 @@ app.post('/api/ocr', requireAuth, async (req, res) => {
 
 必ずJSONのみを返してください（説明文・コードブロック不要）:
 {
+  "タイトル": "ワークシートに明示されたタイトル。明示されていなければ夢の内容から内容を端的に表すタイトルを生成する",
+  "ワーク種別": "個別セッション/グループセッション/合宿リトリート/その他 のいずれか。明示されていなければ個別セッション",
   "夢の内容": "ワークシートに記入された夢の本文",
   "ワーク中の気づき": "ワーク中に気づいたこと",
   "後日談": "後日談・その後の変化（なければ空文字）",
@@ -367,7 +394,7 @@ app.post('/api/ocr', requireAuth, async (req, res) => {
     const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('OCR結果の解析に失敗しました');
-    const ocrResult = JSON.parse(jsonMatch[0]);
+    const ocrResult = normalizeAiRecordFields(JSON.parse(jsonMatch[0]));
 
     // 2. OCR成功後にGCSアップロード（孤立ファイルを防止）
     const tempId = `tmp-${Date.now()}`;
@@ -403,6 +430,8 @@ ${text}
 
 必ずJSONのみを返してください（説明文・コードブロック不要）。情報がない項目は空文字にしてください:
 {
+  "タイトル": "本文中に明示されたタイトル。明示されていなければ夢の内容から内容を端的に表すタイトルを生成する",
+  "ワーク種別": "個別セッション/グループセッション/合宿リトリート/その他 のいずれか。明示されていなければ個別セッション",
   "夢主年代": "10代/20代/30代/40代/50代/60代以上 のいずれか。記載がなければ空文字",
   "夢主性別": "男性/女性/その他 のいずれか。記載がなければ空文字",
   "夢主の状況": "夢を見た人の当時の状況・背景",
@@ -434,7 +463,7 @@ ${text}
     const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('AI分析結果の解析に失敗しました');
-    const result = JSON.parse(jsonMatch[0]);
+    const result = normalizeAiRecordFields(JSON.parse(jsonMatch[0]));
 
     res.json({ ok: true, data: result });
   } catch (err) {

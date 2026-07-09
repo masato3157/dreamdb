@@ -40,6 +40,8 @@
 
   // Field map: field name → element id
   const FIELD_IDS = {
+    'タイトル': 'f-title',
+    'ワーク種別': 'f-work-type',
     '夢主年代': 'f-age',
     '夢主性別': 'f-gender',
     '夢主の状況': 'f-situation',
@@ -168,6 +170,7 @@
   }
 
   function recordCard(r) {
+    const title = r['タイトル'] || '';
     const preview = (r['夢の内容'] || '').slice(0, 80) + (r['夢の内容']?.length > 80 ? '…' : '');
     return `<div class="record-card" data-id="${esc(r['ID'])}">
       <div class="record-card-top">
@@ -179,8 +182,10 @@
         ${r['夢主性別'] ? `<span class="tag">${esc(r['夢主性別'])}</span>` : ''}
         ${r['ワーク前に自覚していた悩み'] ? `<span class="tag">${esc(r['ワーク前に自覚していた悩み'])}</span>` : ''}
         ${r['夢の分類'] ? `<span class="tag">${esc(r['夢の分類'])}</span>` : ''}
+        ${r['ワーク種別'] ? `<span class="tag">${esc(r['ワーク種別'])}</span>` : ''}
         ${r['公開可否'] ? `<span class="${publicTagClass(r['公開可否'])}">${esc(r['公開可否'])}</span>` : ''}
       </div>
+      ${title ? `<p class="record-preview"><strong>${esc(title)}</strong></p>` : ''}
       ${preview ? `<p class="record-preview">${esc(preview)}</p>` : ''}
     </div>`;
   }
@@ -202,6 +207,7 @@
         const el = document.getElementById(elId);
         if (el && record[field] !== undefined) el.value = record[field];
       });
+      if (!record['ワーク種別']) document.getElementById('f-work-type').value = '個別セッション';
       btnSave.textContent = '変更を保存';
       const hasImages = (record['画像ID'] || '').trim().length > 0;
       imageSection.classList.toggle('hidden', !hasImages);
@@ -213,6 +219,7 @@
       // Set defaults
       document.getElementById('f-public').value = '要確認';
       document.getElementById('f-source').value = 'フォーム入力';
+      document.getElementById('f-work-type').value = '個別セッション';
       btnSave.textContent = '保存する';
     }
     // Scroll to top of form
@@ -229,7 +236,7 @@
   }
 
   function validateForm(data) {
-    const required = ['夢主年代', '夢主性別', '夢主の状況', '夢の分類', '夢の内容', 'ワーク中の気づき', '入力元', '公開可否'];
+    const required = ['タイトル', '夢主年代', '夢主性別', '夢主の状況', '夢の分類', '夢の内容', 'ワーク種別', 'ワーク中の気づき', '入力元', '公開可否'];
     let valid = true;
     dreamForm.querySelectorAll('.error').forEach(el => el.classList.remove('error'));
     required.forEach(field => {
