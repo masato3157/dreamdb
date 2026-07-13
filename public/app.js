@@ -144,7 +144,7 @@
     });
 
     // Sort: newest first (by 入力日時)
-    filtered.sort((a, b) => (b['入力日時'] || '').localeCompare(a['入力日時'] || ''));
+    filtered.sort((a, b) => new Date(b['入力日時'] || 0) - new Date(a['入力日時'] || 0));
 
     recordCount.textContent = `${filtered.length} 件`;
 
